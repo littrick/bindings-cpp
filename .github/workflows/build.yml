@@ -3,7 +3,7 @@ on:
   push:
     branches:
       - main
-      - beta
+  workflow_dispatch:
 concurrency:
   group: build-${{ github.ref }}
   cancel-in-progress: false
@@ -29,8 +29,8 @@ jobs:
             command: prebuildify
 
           - name: win32-arm64
-            os: windows-latest
-            node: x64
+            os: windows-11-vs2026-arm
+            node: arm64
             command: prebuildify
             args: --arch arm64 --tag-armv 8
 
@@ -93,8 +93,13 @@ jobs:
         with:
           node-version: 20
           architecture: ${{ matrix.node }}
+
+      - name: Setup MSVC
+        if: ${{ matrix.os == 'windows-latest' || matrix.os == 'windows-11-vs2026-arm' }}
+        run: choco install visualstudio2022-workload-vctools -y
+
       - uses: actions/checkout@v4
-      - run: npm ci
+      - run: npm install --ignore-scripts
       - run: npm run ${{ matrix.command }} -- ${{ matrix.args }}
       - uses: actions/upload-artifact@v4
         with:
@@ -117,9 +122,26 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npm ci
+      - run: npm install --ignore-scripts
       - run: npm run build
       - run: npm run semantic-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  package:
+    needs: prebuild
+    name: Package All
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: build-artifacts-*
+          merge-multiple: true
+          path: prebuilds
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: all-artifacts
+          path: prebuilds
